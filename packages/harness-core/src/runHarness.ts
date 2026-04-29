@@ -1,7 +1,9 @@
 import type { HarnessRequest, HarnessResponse, HarnessStreamEvent } from "./types";
 import { createProposedDiff, isDiffRequest } from "./diffs/proposeDiff";
-import { createOpenAIProviderFromEnv } from "./providers/openaiProvider";
+import { DEFAULT_MODEL_BY_PROVIDER, DEFAULT_PROVIDER } from "./providers/catalog";
+import { createProvider } from "./providers/registry";
 import type { LLMMessage, LLMProvider } from "./providers/types";
+import { retrieveRelevantChunks } from "./rag/simpleRetriever";
 import { listFilesTool } from "./tools/listFiles";
 
 export async function runHarness(request: HarnessRequest): Promise<HarnessResponse> {
@@ -73,8 +75,8 @@ export async function runHarness(request: HarnessRequest): Promise<HarnessRespon
   }
 
   try {
-    const provider = createOpenAIProviderFromEnv();
-    const answer = await provider.complete(buildMessages(request));
+    const provider = createProviderFromRequest(request);
+    const answer = await provider.complete(await buildMessages(request));
 
     return {
       answer,
@@ -165,9 +167,9 @@ export async function* runHarnessStream(request: HarnessRequest): AsyncGenerator
   }
 
   try {
-    const provider = createOpenAIProviderFromEnv();
+    const provider = createProviderFromRequest(request);
 
-    yield* streamProviderAnswer(provider, buildMessages(request));
+    yield* streamProviderAnswer(provider, await buildMessages(request));
     yield { type: "done" };
   } catch (error) {
     yield {
@@ -204,7 +206,15 @@ function formatFileList(files: string[]): string {
   return `Fichiers du projet :\n${files.map((file) => `- ${file}`).join("\n")}`;
 }
 
-function buildMessages(request: HarnessRequest): LLMMessage[] {
+async function buildMessages(request: HarnessRequest): Promise<LLMMessage[]> {
+  const retrievedChunks = request.workspacePath
+    ? await retrieveRelevantChunks(request.workspacePath, request.prompt, {
+        activeFile: request.activeFile,
+        selection: request.selection,
+        maxChunks: 4
+      })
+    : [];
+
   return [
     {
       role: "system",
@@ -225,7 +235,9 @@ function buildMessages(request: HarnessRequest): LLMMessage[] {
         `- activeFile: ${request.activeFile ?? "non fourni"}`,
         `- languageId: ${request.languageId ?? "non fourni"}`,
         `- selection: ${formatSelection(request.selection)}`,
-        `- openTabs: ${request.openTabs?.join(", ") || "aucun"}`
+        `- openTabs: ${request.openTabs?.join(", ") || "aucun"}`,
+        "",
+        formatRetrievedChunks(retrievedChunks)
       ].join("\n")
     }
   ];
@@ -240,6 +252,25 @@ function formatSelection(selection: string | undefined): string {
   const preview = normalized.length > 2000 ? `${normalized.slice(0, 2000)}...` : normalized;
 
   return `${selection.length} caractères (${preview})`;
+}
+
+function formatRetrievedChunks(
+  chunks: Array<{ filePath: string; startLine: number; endLine: number; text: string; score: number }>
+): string {
+  if (chunks.length === 0) {
+    return "Contexte local indexé : aucun chunk pertinent trouvé.";
+  }
+
+  return [
+    "Contexte local indexé :",
+    ...chunks.map((chunk) => {
+      const preview = chunk.text.length > 600 ? `${chunk.text.slice(0, 600)}...` : chunk.text;
+      return [
+        `- ${chunk.filePath}:${chunk.startLine}-${chunk.endLine} (score ${chunk.score})`,
+        `  ${preview.replace(/\n/g, "\n  ")}`
+      ].join("\n");
+    })
+  ].join("\n");
 }
 
 async function* streamProviderAnswer(provider: LLMProvider, messages: LLMMessage[]): AsyncGenerator<HarnessStreamEvent> {
@@ -270,4 +301,11 @@ function chunkText(text: string): string[] {
   }
 
   return text.match(/[\s\S]{1,80}/g) ?? [text];
+}
+
+function createProviderFromRequest(request: HarnessRequest): LLMProvider {
+  const providerId = request.provider ?? DEFAULT_PROVIDER;
+  const model = request.model ?? DEFAULT_MODEL_BY_PROVIDER[providerId];
+
+  return createProvider({ provider: providerId, model });
 }

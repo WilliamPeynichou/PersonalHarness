@@ -3,5 +3,6 @@ apps/*/node_modules/
 apps/*/out/
 packages/*/node_modules/
 packages/*/dist/
+.bilibop-ai/
 .env
 .DS_Store

@@ -21,6 +21,21 @@ export function assertInsideWorkspace(workspacePath: string, targetPath: string)
   }
 }
 
+export function assertAllowedWorkspacePath(workspacePath: string, targetPath: string): void {
+  assertInsideWorkspace(workspacePath, targetPath);
+
+  const resolvedWorkspace = path.resolve(workspacePath);
+  const resolvedTarget = path.resolve(resolvedWorkspace, targetPath);
+  const relativePath = path.relative(resolvedWorkspace, resolvedTarget);
+  const segments = relativePath.split(path.sep).filter(Boolean);
+
+  for (const segment of segments) {
+    if (BLOCKED_SEGMENTS.has(segment) || isBlockedEnvSegment(segment)) {
+      throw new Error(`Path is blocked by workspace policy: ${resolvedTarget}`);
+    }
+  }
+}
+
 function assertInsideResolvedPath(workspacePath: string, targetPath: string): void {
   const relativePath = path.relative(workspacePath, targetPath);
 
@@ -35,4 +50,10 @@ function assertInsideResolvedPath(workspacePath: string, targetPath: string): vo
 
 function isNotFoundError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
+}
+
+const BLOCKED_SEGMENTS = new Set([".git", "node_modules"]);
+
+function isBlockedEnvSegment(segment: string): boolean {
+  return segment === ".env" || segment.startsWith(".env.");
 }

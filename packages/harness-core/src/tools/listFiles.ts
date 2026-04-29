@@ -14,7 +14,7 @@ export type ListFilesOutput = {
 
 const DEFAULT_MAX_DEPTH = 3;
 const MAX_ALLOWED_DEPTH = 8;
-const IGNORED_DIRECTORIES = new Set([".git", "node_modules", "dist", "build", "out"]);
+const IGNORED_DIRECTORIES = new Set([".git", "node_modules", "dist", "build", "out", ".bilibop-ai"]);
 
 export const listFilesTool: Tool<ListFilesInput, ListFilesOutput> = {
   name: "list_files",

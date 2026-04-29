@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { assertInsideWorkspace } from "../security/workspaceGuard";
+import { assertAllowedWorkspacePath } from "../security/workspaceGuard";
 import type { Tool } from "./types";
 
 export type ReadFileInput = {
@@ -28,7 +28,7 @@ export const readFileTool: Tool<ReadFileInput, ReadFileOutput> = {
 };
 
 function resolveInsideWorkspace(workspacePath: string, targetPath: string): string {
-  assertInsideWorkspace(workspacePath, targetPath);
+  assertAllowedWorkspacePath(workspacePath, targetPath);
   return path.resolve(workspacePath, targetPath);
 }
 

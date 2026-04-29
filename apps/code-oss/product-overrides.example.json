@@ -1,0 +1,15 @@
+{
+  "nameShort": "Bilibop",
+  "nameLong": "Bilibop AI",
+  "applicationName": "bilibop",
+  "dataFolderName": ".bilibop-ai",
+  "urlProtocol": "bilibop",
+  "extensionsGallery": null,
+  "builtInExtensions": [
+    {
+      "name": "bilibop-ai-sidebar",
+      "version": "0.0.1",
+      "repo": "local"
+    }
+  ]
+}

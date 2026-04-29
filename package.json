@@ -4,7 +4,10 @@
   "private": true,
   "description": "Front VS Code minimal avec sidebar IA et harness maison.",
   "scripts": {
-    "compile": "pnpm --filter bilibop-ai-sidebar run compile"
+    "compile": "pnpm --filter bilibop-ai-sidebar run compile",
+    "build": "pnpm run compile",
+    "test": "pnpm --filter harness-core run test && pnpm --filter bilibop-ai-sidebar run test",
+    "lint": "pnpm --filter harness-core run lint && pnpm --filter bilibop-ai-sidebar run lint"
   },
   "packageManager": "pnpm@10.9.0"
 }

@@ -1,3 +1,5 @@
+import { requireEnv } from "./env";
+import { parseEventJson, readServerSentEvents } from "./sse";
 import type { LLMMessage, LLMProvider } from "./types";
 
 type OpenAIProviderOptions = {
@@ -91,7 +93,12 @@ export class OpenAIProvider implements LLMProvider {
       throw new Error("La réponse OpenAI streaming ne contient pas de flux lisible.");
     }
 
-    for await (const event of readServerSentEvents(response.body)) {
+    for await (const sseEvent of readServerSentEvents(response.body)) {
+      const event = parseEventJson<OpenAIStreamEvent>(sseEvent);
+      if (!event) {
+        continue;
+      }
+
       if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
         yield event.delta;
       }
@@ -105,14 +112,8 @@ export class OpenAIProvider implements LLMProvider {
 }
 
 export function createOpenAIProviderFromEnv(env: NodeJS.ProcessEnv = process.env): OpenAIProvider {
-  const apiKey = env.OPENAI_API_KEY?.trim();
-
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY est manquante. Définis cette variable d'environnement pour utiliser le provider OpenAI.");
-  }
-
   return new OpenAIProvider({
-    apiKey,
+    apiKey: requireEnv(env, "OPENAI_API_KEY", "OpenAI"),
     model: env.OPENAI_MODEL?.trim() || undefined
   });
 }
@@ -174,78 +175,3 @@ function extractOutputText(body: OpenAIResponseBody): string {
   throw new Error("La réponse OpenAI ne contient pas de texte exploitable.");
 }
 
-async function* readServerSentEvents(stream: ReadableStream<Uint8Array>): AsyncIterable<OpenAIStreamEvent> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-
-      for (const rawEvent of drainServerSentEventFrames(buffer)) {
-        buffer = rawEvent.remaining;
-
-        for (const event of parseServerSentEvents(rawEvent.frame)) {
-          yield event;
-        }
-      }
-    }
-
-    buffer += decoder.decode();
-
-    for (const event of parseServerSentEvents(buffer)) {
-      yield event;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-function drainServerSentEventFrames(buffer: string): Array<{ frame: string; remaining: string }> {
-  const frames: Array<{ frame: string; remaining: string }> = [];
-  let remaining = buffer;
-
-  while (true) {
-    const separator = remaining.match(/\r?\n\r?\n/);
-
-    if (!separator || separator.index === undefined) {
-      break;
-    }
-
-    frames.push({
-      frame: remaining.slice(0, separator.index),
-      remaining: remaining.slice(separator.index + separator[0].length)
-    });
-
-    remaining = remaining.slice(separator.index + separator[0].length);
-  }
-
-  return frames;
-}
-
-function parseServerSentEvents(frame: string): OpenAIStreamEvent[] {
-  const dataLines = frame
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice("data:".length).trimStart().trim())
-    .filter((line) => line.length > 0 && line !== "[DONE]");
-
-  if (dataLines.length === 0) {
-    return [];
-  }
-
-  const joinedData = dataLines.join("\n");
-
-  try {
-    return [JSON.parse(joinedData) as OpenAIStreamEvent];
-  } catch {
-    return dataLines.map((line) => JSON.parse(line) as OpenAIStreamEvent);
-  }
-}

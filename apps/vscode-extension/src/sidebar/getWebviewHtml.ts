@@ -46,6 +46,34 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       font-size: 12px;
     }
 
+    .selectors {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    select {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 28px;
+      padding: 4px 8px;
+      border: 1px solid var(--vscode-dropdown-border, transparent);
+      border-radius: 4px;
+      color: var(--vscode-dropdown-foreground);
+      background: var(--vscode-dropdown-background);
+      font: inherit;
+    }
+
+    select:focus {
+      outline: 1px solid var(--vscode-focusBorder);
+      outline-offset: -1px;
+    }
+
+    select:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
     textarea {
       box-sizing: border-box;
       width: 100%;
@@ -189,6 +217,21 @@ export function getWebviewHtml(webview: vscode.Webview): string {
 <body>
   <main class="layout">
     <h1>Bilibop AI</h1>
+    <div class="selectors">
+      <label for="provider">
+        Provider
+        <select id="provider">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+        </select>
+      </label>
+      <label for="model">
+        Modèle
+        <select id="model" disabled>
+          <option value="">Chargement…</option>
+        </select>
+      </label>
+    </div>
     <label for="prompt">
       Instruction utilisateur
       <textarea id="prompt" placeholder="Décris ce que tu veux demander à l'agent."></textarea>
@@ -203,20 +246,35 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     const vscode = acquireVsCodeApi();
     const textarea = document.getElementById("prompt");
     const sendButton = document.getElementById("send");
+    const providerSelect = document.getElementById("provider");
+    const modelSelect = document.getElementById("model");
     const response = document.getElementById("response");
     const diffs = document.getElementById("diffs");
     const events = document.getElementById("events");
+    const diffStates = new Map();
+
+    let pendingModelId = null;
+
+    vscode.postMessage({ type: "request_initial_state" });
+
+    providerSelect.addEventListener("change", () => {
+      pendingModelId = null;
+      requestModels(providerSelect.value);
+    });
 
     sendButton.addEventListener("click", () => {
       response.textContent = "";
       response.dataset.empty = "true";
       diffs.textContent = "";
       events.textContent = "";
+      diffStates.clear();
       sendButton.disabled = true;
 
       vscode.postMessage({
         type: "user_prompt",
-        prompt: textarea.value
+        prompt: textarea.value,
+        provider: providerSelect.value,
+        model: modelSelect.value
       });
     });
 
@@ -229,15 +287,84 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     window.addEventListener("message", (event) => {
       const message = event.data;
 
-      if (message.type === "assistant_response") {
-        response.textContent = message.text;
-        response.dataset.empty = "false";
+      if (message.type === "initial_state") {
+        handleInitialState(message);
+        return;
+      }
+
+      if (message.type === "models_list") {
+        handleModelsList(message);
+        return;
       }
 
       if (message.type === "harness_event") {
         handleHarnessEvent(message.event);
+        return;
+      }
+
+      if (message.type === "apply_result") {
+        handleApplyResult(message);
+        return;
       }
     });
+
+    function handleInitialState(message) {
+      if (typeof message.provider === "string") {
+        providerSelect.value = message.provider;
+      }
+      if (typeof message.model === "string") {
+        pendingModelId = message.model;
+      }
+      requestModels(providerSelect.value);
+    }
+
+    function requestModels(provider) {
+      modelSelect.disabled = true;
+      modelSelect.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Chargement…";
+      modelSelect.appendChild(placeholder);
+
+      vscode.postMessage({
+        type: "request_models",
+        provider
+      });
+    }
+
+    function handleModelsList(message) {
+      if (message.provider !== providerSelect.value) {
+        return;
+      }
+
+      modelSelect.innerHTML = "";
+
+      const list = Array.isArray(message.models) ? message.models : [];
+
+      if (list.length === 0) {
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "Aucun modèle disponible";
+        modelSelect.appendChild(empty);
+        modelSelect.disabled = true;
+        return;
+      }
+
+      for (const descriptor of list) {
+        const option = document.createElement("option");
+        option.value = descriptor.id;
+        option.textContent = descriptor.label || descriptor.id;
+        modelSelect.appendChild(option);
+      }
+
+      const desired = pendingModelId;
+      if (desired && list.some((m) => m.id === desired)) {
+        modelSelect.value = desired;
+      }
+
+      modelSelect.disabled = false;
+      pendingModelId = null;
+    }
 
     function handleHarnessEvent(event) {
       if (!event || typeof event.type !== "string") {
@@ -321,8 +448,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       const acceptButton = document.createElement("button");
       acceptButton.type = "button";
       acceptButton.textContent = "Accepter";
-      acceptButton.disabled = true;
-      acceptButton.title = "L'application de diff sera ajoutée à l'étape 10.";
+      acceptButton.disabled = false;
 
       const rejectButton = document.createElement("button");
       rejectButton.type = "button";
@@ -337,20 +463,68 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       status.className = "diff-status";
       status.textContent = "En attente de validation. Aucun fichier n'a été modifié.";
 
+      diffStates.set(diff.id, {
+        card,
+        acceptButton,
+        rejectButton,
+        status,
+        diff
+      });
+
       viewButton.addEventListener("click", () => {
         const isVisible = preview.dataset.visible === "true";
         preview.dataset.visible = String(!isVisible);
         viewButton.textContent = isVisible ? "Voir diff" : "Masquer";
       });
 
+      acceptButton.addEventListener("click", () => {
+        const state = diffStates.get(diff.id);
+
+        if (!state) {
+          return;
+        }
+
+        state.status.textContent = "Application du diff en cours...";
+        state.acceptButton.disabled = true;
+        state.rejectButton.disabled = true;
+
+        vscode.postMessage({
+          type: "apply_proposed_diff",
+          diff: state.diff
+        });
+      });
+
       rejectButton.addEventListener("click", () => {
         status.textContent = "Diff refusé localement. Aucun fichier n'a été modifié.";
         rejectButton.disabled = true;
+        acceptButton.disabled = true;
       });
 
       actions.append(viewButton, acceptButton, rejectButton);
       card.append(title, file, summary, actions, preview, status);
       diffs.appendChild(card);
+    }
+
+    function handleApplyResult(message) {
+      if (!message || !message.diffId) {
+        appendEvent(message && message.message ? message.message : "Résultat d'application reçu.");
+        return;
+      }
+
+      const state = diffStates.get(message.diffId);
+
+      if (!state) {
+        appendEvent(message.message || "Résultat d'application reçu.");
+        return;
+      }
+
+      state.status.textContent = message.success
+        ? message.message
+        : "Échec de l'application : " + message.message;
+
+      state.acceptButton.disabled = true;
+      state.rejectButton.disabled = true;
+      appendEvent(message.message || (message.success ? "Diff appliqué." : "Application du diff échouée."));
     }
 
     function formatDiffPreview(diff) {

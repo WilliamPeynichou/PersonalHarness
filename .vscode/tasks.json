@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "pnpm: compile extension",
+      "type": "shell",
+      "command": "pnpm",
+      "args": [
+        "--filter",
+        "bilibop-ai-sidebar",
+        "run",
+        "compile"
+      ],
+      "group": "build",
+      "problemMatcher": "$tsc"
+    }
+  ]
+}

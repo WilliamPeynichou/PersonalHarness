@@ -1,3 +1,5 @@
+import type { ProviderId } from "./providers/catalog";
+
 export type HarnessRequest = {
   prompt: string;
   workspacePath?: string;
@@ -5,6 +7,8 @@ export type HarnessRequest = {
   selection?: string;
   openTabs?: string[];
   languageId?: string;
+  provider?: ProviderId;
+  model?: string;
 };
 
 export type ProposedDiff = {
