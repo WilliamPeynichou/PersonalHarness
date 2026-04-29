@@ -1,0 +1,10 @@
+export type { HarnessEvent, HarnessRequest, HarnessResponse, HarnessStreamEvent, ProposedDiff } from "./types";
+export { runHarness, runHarnessStream } from "./runHarness";
+export { createProposedDiff } from "./diffs/proposeDiff";
+export type { LLMMessage, LLMProvider } from "./providers/types";
+export { createOpenAIProviderFromEnv, OpenAIProvider } from "./providers/openaiProvider";
+export type { Tool, ToolContext, ToolRisk } from "./tools/types";
+export { grepTool } from "./tools/grep";
+export { listFilesTool } from "./tools/listFiles";
+export { readFileTool } from "./tools/readFile";
+export { assertInsideWorkspace } from "./security/workspaceGuard";

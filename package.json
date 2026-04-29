@@ -1,0 +1,10 @@
+{
+  "name": "bilibop-ai-ide",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Front VS Code minimal avec sidebar IA et harness maison.",
+  "scripts": {
+    "compile": "pnpm --filter bilibop-ai-sidebar run compile"
+  },
+  "packageManager": "pnpm@10.9.0"
+}

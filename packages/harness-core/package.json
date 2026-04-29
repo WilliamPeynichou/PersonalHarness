@@ -1,0 +1,27 @@
+{
+  "name": "harness-core",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Logique agentique testable hors VS Code pour Bilibop AI IDE.",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "compile": "tsc -p ./",
+    "build": "pnpm run compile",
+    "test": "echo \"No tests configured yet\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

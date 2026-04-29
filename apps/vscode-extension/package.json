@@ -1,0 +1,59 @@
+{
+  "name": "bilibop-ai-sidebar",
+  "displayName": "Bilibop AI Sidebar",
+  "description": "Sidebar IA branchée sur harness maison",
+  "version": "0.0.1",
+  "publisher": "bilibop",
+  "private": true,
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:bilibop-ai-sidebar.helloWorld",
+    "onView:bilibop-ai.chatView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "bilibop-ai",
+          "title": "Bilibop AI",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "bilibop-ai": [
+        {
+          "id": "bilibop-ai.chatView",
+          "name": "Agent"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "bilibop-ai-sidebar.helloWorld",
+        "title": "Bilibop AI: Hello World"
+      }
+    ]
+  },
+  "scripts": {
+    "precompile": "pnpm --filter harness-core run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "pnpm run compile",
+    "test": "echo \"No tests configured yet\""
+  },
+  "dependencies": {
+    "harness-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^5.7.0"
+  }
+}
